@@ -1,0 +1,44 @@
+name: Download NASA APOD Image
+
+on:
+  workflow_dispatch:
+
+jobs:
+  download_apod:
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Make API call to NASA APOD
+      id: call_apod
+      run: |
+        response=$(curl -s "https://api.nasa.gov/planetary/apod?api_key=${{ secrets.NASA_API_KEY }}")
+        echo "$response" > apod.json
+
+        # Extract image URL (only if it's an image, not video)
+        media_type=$(echo "$response" | jq -r '.media_type')
+        if [ "$media_type" == "image" ]; then
+          image_url=$(echo "$response" | jq -r '.hdurl // .url')
+          echo "IMAGE_URL=$image_url" >> $GITHUB_ENV
+        else
+          echo "IMAGE_URL=" >> $GITHUB_ENV
+        fi
+
+    - name: Download image if available
+      if: env.IMAGE_URL != ''
+      run: |
+        echo "Downloading image from $IMAGE_URL"
+        curl -L "$IMAGE_URL" -o apod_image.jpg
+
+    - name: Upload artifact
+      if: env.IMAGE_URL != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: apod-image
+        path: apod_image.jpg
+
+    - name: Show image link
+      run: |
+        echo "NASA APOD Image URL: $IMAGE_URL"
